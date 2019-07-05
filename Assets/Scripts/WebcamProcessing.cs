@@ -23,7 +23,7 @@ public class WebcamProcessing : MonoBehaviour
 
     [SerializeField]
     [Tooltip("the color that sets our threshold values above which we effect a given pixel")]
-    Color32 m_ColorThreshold;
+    Color32 m_ColorThreshold = default( Color32 );
 
     [SerializeField]
     ExampleEffect effect = ExampleEffect.LeftShiftThreshold;
@@ -35,11 +35,11 @@ public class WebcamProcessing : MonoBehaviour
 
     [SerializeField]
     [Tooltip("select a resolution compatible with your webcam.  you will need to move the camera if you change this")]
-    Vector2Int m_WebcamTextureSize = new Vector2Int(1024, 576);
+    Vector2Int m_WebcamTextureSize = new Vector2Int(1920, 1080);
 
     [SerializeField]
     [Tooltip("The texture we will copy our process data into")]
-    Texture2D m_Texture;
+    Texture2D m_Texture = default(Texture2D);
 
     JobHandle m_RGBComplementBurstJobHandle;
 
@@ -53,20 +53,12 @@ public class WebcamProcessing : MonoBehaviour
 
     void OnEnable()
     {
-        m_Data = new Color32[m_WebcamTextureSize.x * m_WebcamTextureSize.y];
-        m_NativeColors = new NativeArray<Color32>(m_Data, Allocator.Persistent);
-
-        var slice = new NativeSlice<Color32>(m_NativeColors);
-        m_NativeRed = slice.SliceWithStride<byte>(0);
-        m_NativeGreen = slice.SliceWithStride<byte>(1);
-        m_NativeBlue = slice.SliceWithStride<byte>(2);
-
         if (m_WebcamIndex >= WebCamTexture.devices.Length)
             m_WebcamIndex = WebCamTexture.devices.Length - 1;
 
         m_CamDevice = WebCamTexture.devices[m_WebcamIndex];
-        m_CamTexture = new WebCamTexture(m_CamDevice.name, m_WebcamTextureSize.x, m_WebcamTextureSize.y);
-        Renderer renderer = GetComponent<Renderer>();
+        m_CamTexture = new WebCamTexture(m_CamDevice.name, 1920, 1080);
+        var renderer = GetComponent<Renderer>();
         renderer.material.mainTexture = m_CamTexture;
 
         m_CamTexture.Play();
@@ -79,6 +71,26 @@ public class WebcamProcessing : MonoBehaviour
 
     void Update()
     {
+        if( m_Data == null )
+        {
+            if( m_CamTexture.width < 100 )
+            {
+                Debug.Log( "Waiting for camera texrute..." );
+                return;
+            }
+
+            m_WebcamTextureSize = new Vector2Int(m_CamTexture.width, m_CamTexture.height);
+            Debug.Log( $"Initialize camera at size {m_WebcamTextureSize.x}x{m_WebcamTextureSize.y}" );
+
+            m_Data = new Color32[m_WebcamTextureSize.x * m_WebcamTextureSize.y];
+            m_NativeColors = new NativeArray<Color32>(m_Data, Allocator.Persistent);
+
+            var slice = new NativeSlice<Color32>(m_NativeColors);
+            m_NativeRed = slice.SliceWithStride<byte>(0);
+            m_NativeGreen = slice.SliceWithStride<byte>(1);
+            m_NativeBlue = slice.SliceWithStride<byte>(2);
+        }
+
         // load is one half of our big bottleneck with this method - copying data
         m_CamTexture.GetPixels32(m_Data);
         m_NativeColors.CopyFrom(m_Data);
